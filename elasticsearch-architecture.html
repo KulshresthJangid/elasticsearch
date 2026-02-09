@@ -1,0 +1,578 @@
+<!--
+  ~ Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+  ~ or more contributor license agreements. Licensed under the "Elastic License
+  ~ 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+  ~ Public License v 1"; you may not use this file except in compliance with, at
+  ~ your election, the "Elastic License 2.0", the "GNU Affero General Public
+  ~ License v3.0 only", or the "Server Side Public License, v 1".
+  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elasticsearch Architecture</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; padding: 20px; min-height: 100vh; }
+        h1 { text-align: center; color: #fff; margin-bottom: 30px; font-size: 28px; }
+        .container { max-width: 1600px; margin: 0 auto; }
+        .layer { margin-bottom: 15px; border-radius: 12px; padding: 15px; position: relative; }
+        .layer-title { font-weight: bold; font-size: 14px; margin-bottom: 12px; padding: 5px 10px; border-radius: 6px; display: inline-block; }
+        .components { display: flex; flex-wrap: wrap; gap: 10px; }
+        .component { padding: 12px 16px; border-radius: 8px; font-size: 12px; text-align: center; min-width: 120px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: transform 0.2s; position: relative; cursor: pointer; }
+        .component:hover { transform: translateY(-2px); }
+        .component small { display: block; opacity: 0.7; font-size: 10px; margin-top: 4px; }
+
+        /* Tooltip styles */
+        .component .tooltip {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a1a2e;
+            color: #fff;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+            width: 280px;
+            text-align: left;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            transition: opacity 0.3s, visibility 0.3s;
+            margin-bottom: 10px;
+        }
+        .component .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 8px solid transparent;
+            border-top-color: #1a1a2e;
+        }
+        .component:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+        .tooltip strong { color: #4a90d9; display: block; margin-bottom: 6px; font-size: 13px; }
+        .tooltip em { color: #82b366; font-style: normal; }
+
+        /* Arrow connectors */
+        .arrow-down { text-align: center; color: #666; font-size: 24px; margin: 5px 0; }
+        .arrow-right { color: #666; font-size: 20px; margin: 0 5px; }
+
+        /* Layer colors */
+        .client-layer { background: linear-gradient(135deg, #dae8fc 0%, #b8d4f8 100%); }
+        .client-layer .layer-title { background: #6c8ebf; color: white; }
+        .client-layer .component { background: #fff2cc; border: 2px solid #d6b656; color: #5c4a1f; }
+
+        .http-layer { background: linear-gradient(135deg, #d5e8d4 0%, #b8dbb6 100%); }
+        .http-layer .layer-title { background: #82b366; color: white; }
+        .http-layer .component { background: #e1d5e7; border: 2px solid #9673a6; color: #4a3560; }
+
+        .action-layer { background: linear-gradient(135deg, #ffe6cc 0%, #ffd4a8 100%); }
+        .action-layer .layer-title { background: #d79b00; color: white; }
+        .action-layer .component { background: #f8cecc; border: 2px solid #b85450; color: #5c2a28; }
+
+        .node-layer { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 3px solid #4a4e69; }
+        .node-layer .layer-title { background: #4a4e69; color: white; }
+        .node-layer .component { background: #4a4e69; border: 2px solid #22223b; color: white; }
+
+        .middle-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+
+        .cluster-layer { background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%); }
+        .cluster-layer .layer-title { background: #666; color: white; }
+        .cluster-layer .component { background: #b0e3e6; border: 2px solid #0e8088; color: #0a5c5f; }
+
+        .discovery-layer { background: linear-gradient(135deg, #e6d0de 0%, #d9bdd0 100%); }
+        .discovery-layer .layer-title { background: #996185; color: white; }
+        .discovery-layer .component { background: #d0cee2; border: 2px solid #56517e; color: #3a3756; }
+
+        .transport-layer { background: linear-gradient(135deg, #fad9d5 0%, #f5c4be 100%); }
+        .transport-layer .layer-title { background: #ae4132; color: white; }
+        .transport-layer .component { background: #f9d5c4; border: 2px solid #c5795e; color: #6b3d2e; }
+
+        .data-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+
+        .index-layer { background: linear-gradient(135deg, #d4edda 0%, #b8e0c2 100%); }
+        .index-layer .layer-title { background: #28a745; color: white; }
+        .index-layer .component { background: #c3e6cb; border: 2px solid #155724; color: #0d3314; }
+
+        .search-layer { background: linear-gradient(135deg, #cce5ff 0%, #a8d4ff 100%); }
+        .search-layer .layer-title { background: #004085; color: white; }
+        .search-layer .component { background: #b8daff; border: 2px solid #004085; color: #002752; }
+
+        .repo-layer { background: linear-gradient(135deg, #e2d5f1 0%, #d4c4e8 100%); }
+        .repo-layer .layer-title { background: #7b68ee; color: white; }
+        .repo-layer .component { background: #d4c4e3; border: 2px solid #7b68ee; color: #4a3d8c; }
+
+        .lucene-layer { background: linear-gradient(135deg, #fff3cd 0%, #ffe9a0 100%); }
+        .lucene-layer .layer-title { background: #856404; color: white; }
+        .lucene-layer .component { background: #ffeeba; border: 2px solid #856404; color: #533e02; }
+
+        .xpack-layer { background: linear-gradient(135deg, #ffcccc 0%, #ffb3b3 100%); }
+        .xpack-layer .layer-title { background: #cc0000; color: white; }
+        .xpack-layer .component { background: #ffb3b3; border: 2px solid #cc0000; color: #660000; }
+
+        .modules-layer { background: linear-gradient(135deg, #e6f3ff 0%, #cce5ff 100%); }
+        .modules-layer .layer-title { background: #0066cc; color: white; }
+        .modules-layer .component { background: #cce5ff; border: 2px solid #0066cc; color: #003d7a; }
+
+        .libs-layer { background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%); }
+        .libs-layer .layer-title { background: #666; color: white; }
+        .libs-layer .component { background: #e0e0e0; border: 2px solid #666; color: #333; }
+
+        .flow-arrow {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #4a90d9;
+            font-size: 30px;
+            margin: 8px 0;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .horizontal-flow { display: flex; align-items: center; }
+        .horizontal-arrow { color: #4a90d9; font-size: 24px; margin: 0 10px; }
+
+        .legend { background: rgba(255,255,255,0.1); border-radius: 8px; padding: 15px; margin-top: 20px; color: white; }
+        .legend h3 { margin-bottom: 10px; }
+        .legend-item { display: inline-flex; align-items: center; margin-right: 20px; margin-bottom: 8px; }
+        .legend-color { width: 20px; height: 20px; border-radius: 4px; margin-right: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Elasticsearch Low-Level Architecture</h1>
+
+        <!-- Client Layer -->
+        <div class="layer client-layer">
+            <div class="layer-title">👤 Client Layer</div>
+            <div class="components">
+                <div class="component">REST Client<small>client/rest</small>
+                    <div class="tooltip"><strong>REST Client</strong>Official low-level Java REST client for Elasticsearch. Handles HTTP connections, request/response serialization, retries, and node discovery. Used by higher-level clients.</div>
+                </div>
+                <div class="component">Sniffer<small>client/sniffer</small>
+                    <div class="tooltip"><strong>Sniffer</strong>Automatically discovers cluster nodes by querying the <em>_nodes/http</em> API. Keeps the client's node list up-to-date for load balancing and failover.</div>
+                </div>
+                <div class="component">Transport Client<small>Internal</small>
+                    <div class="tooltip"><strong>Transport Client</strong>Internal binary protocol client for node-to-node communication. Uses TCP transport layer directly. More efficient than REST for internal cluster operations.</div>
+                </div>
+                <div class="component">Kibana<small>modules/kibana</small>
+                    <div class="tooltip"><strong>Kibana Module</strong>Provides Kibana-specific APIs and system indices. Manages Kibana's saved objects, settings, and integrates the UI with Elasticsearch backend services.</div>
+                </div>
+                <div class="component">Java API Client<small>External</small>
+                    <div class="tooltip"><strong>Java API Client</strong>High-level strongly-typed Java client. Provides fluent builders for all Elasticsearch APIs with full type safety and IDE auto-completion support.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- HTTP/REST Layer -->
+        <div class="layer http-layer">
+            <div class="layer-title">🌐 HTTP / REST Layer</div>
+            <div class="components">
+                <div class="component">HTTP Server Transport<small>server/http</small>
+                    <div class="tooltip"><strong>HTTP Server Transport</strong>Accepts incoming HTTP connections from clients. Manages connection pooling, keep-alive, SSL/TLS termination, and request parsing. Entry point for all REST API calls.</div>
+                </div>
+                <div class="component">REST Controller<small>server/rest</small>
+                    <div class="tooltip"><strong>REST Controller</strong>Routes incoming HTTP requests to appropriate REST handlers based on URL path and HTTP method. Handles request validation, authentication, and response formatting.</div>
+                </div>
+                <div class="component">REST Handlers<small>rest/action</small>
+                    <div class="tooltip"><strong>REST Handlers</strong>Individual handlers for each REST endpoint (e.g., <em>RestSearchAction</em>, <em>RestIndexAction</em>). Parses request parameters and delegates to internal action layer.</div>
+                </div>
+                <div class="component">Netty4 Transport<small>modules/transport-netty4</small>
+                    <div class="tooltip"><strong>Netty4 Transport</strong>High-performance async I/O framework powering both HTTP and TCP transport. Provides non-blocking network operations, efficient buffer management, and connection handling.</div>
+                </div>
+                <div class="component">CORS Handler<small>CorsHandler</small>
+                    <div class="tooltip"><strong>CORS Handler</strong>Handles Cross-Origin Resource Sharing for browser-based clients. Manages preflight OPTIONS requests and adds appropriate CORS headers to responses.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- Action Layer -->
+        <div class="layer action-layer">
+            <div class="layer-title">⚡ Action Layer (server/action)</div>
+            <div class="components">
+                <div class="component">Action Module<small>ActionModule</small>
+                    <div class="tooltip"><strong>Action Module</strong>Central registry for all transport actions. Binds action names to their implementations, manages action filters, and coordinates request/response lifecycle.</div>
+                </div>
+                <div class="component">Search Actions<small>action/search</small>
+                    <div class="tooltip"><strong>Search Actions</strong>Handles search requests including <em>_search</em>, <em>_msearch</em>, scroll, and point-in-time APIs. Coordinates distributed search across shards and merges results.</div>
+                </div>
+                <div class="component">Index Actions<small>action/index</small>
+                    <div class="tooltip"><strong>Index Actions</strong>Processes document indexing operations. Handles routing, versioning, and coordinates writes to primary and replica shards. Supports optimistic concurrency control.</div>
+                </div>
+                <div class="component">Bulk Actions<small>action/bulk</small>
+                    <div class="tooltip"><strong>Bulk Actions</strong>Handles batch operations for index/update/delete. Groups operations by shard, executes in parallel, and returns per-document results. Critical for high-throughput ingestion.</div>
+                </div>
+                <div class="component">Admin Actions<small>action/admin</small>
+                    <div class="tooltip"><strong>Admin Actions</strong>Cluster and index administration operations: create/delete indices, update mappings, manage templates, cluster health, node stats, and shard allocation.</div>
+                </div>
+                <div class="component">Get Actions<small>action/get</small>
+                    <div class="tooltip"><strong>Get Actions</strong>Retrieves documents by ID. Supports real-time get (reads from translog), source filtering, and multi-get for batch retrieval. Very fast for known document IDs.</div>
+                </div>
+                <div class="component">Delete Actions<small>action/delete</small>
+                    <div class="tooltip"><strong>Delete Actions</strong>Removes documents by ID or query. Coordinates deletes across primary and replicas. Supports delete-by-query for bulk removal matching a query.</div>
+                </div>
+                <div class="component">Update Actions<small>action/update</small>
+                    <div class="tooltip"><strong>Update Actions</strong>Partial document updates using scripts or partial docs. Performs get-modify-reindex atomically. Supports upsert for create-if-missing semantics.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- Node Layer -->
+        <div class="layer node-layer">
+            <div class="layer-title">🖥️ Node (server/node) - Bootstrap & Lifecycle Manager</div>
+            <div class="components">
+                <div class="component">NodeService<small>Lifecycle</small>
+                    <div class="tooltip"><strong>NodeService</strong>Manages node lifecycle from startup to shutdown. Coordinates initialization of all services, handles graceful shutdown, and provides node-level statistics and health info.</div>
+                </div>
+                <div class="component">Environment<small>Config</small>
+                    <div class="tooltip"><strong>Environment</strong>Encapsulates node configuration: data paths, config paths, plugin directories, and settings. Parsed from elasticsearch.yml and command-line arguments.</div>
+                </div>
+                <div class="component">ThreadPool<small>Executors</small>
+                    <div class="tooltip"><strong>ThreadPool</strong>Manages all executor services for async operations. Different pools for search, indexing, management, etc. Controls concurrency and prevents resource exhaustion.</div>
+                </div>
+                <div class="component">PluginsService<small>Plugins</small>
+                    <div class="tooltip"><strong>PluginsService</strong>Loads and manages plugins at startup. Handles plugin discovery, classloading isolation, extension points, and plugin lifecycle (install/remove/upgrade).</div>
+                </div>
+                <div class="component">IndicesService<small>Index Mgmt</small>
+                    <div class="tooltip"><strong>IndicesService</strong>Top-level index management. Creates/deletes IndexService instances, manages index-level resources, coordinates recovery, and handles index lifecycle events.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- Middle Section: Cluster, Discovery, Transport -->
+        <div class="middle-section">
+            <div class="layer cluster-layer">
+                <div class="layer-title">🌍 Cluster Layer</div>
+                <div class="components" style="flex-direction: column;">
+                    <div class="component">ClusterState Management<small>ClusterState</small>
+                        <div class="tooltip"><strong>ClusterState</strong>Immutable snapshot of entire cluster state: nodes, indices, mappings, settings, routing tables. Published by master to all nodes. Foundation for all cluster operations.</div>
+                    </div>
+                    <div class="component">Cluster Service<small>cluster/service</small>
+                        <div class="tooltip"><strong>Cluster Service</strong>Manages cluster state updates and publication. On master: applies state changes. On data nodes: receives and applies published state. Notifies listeners of changes.</div>
+                    </div>
+                    <div class="component">Routing<small>cluster/routing</small>
+                        <div class="tooltip"><strong>Routing</strong>Determines which shard handles each document/query. Uses consistent hashing on document ID. Manages shard allocation, rebalancing, and routing tables.</div>
+                    </div>
+                    <div class="component">Metadata<small>cluster/metadata</small>
+                        <div class="tooltip"><strong>Metadata</strong>Stores index metadata: mappings, settings, aliases, templates. Also cluster-level metadata like persistent settings and index templates.</div>
+                    </div>
+                    <div class="component">Coordination<small>cluster/coordination</small>
+                        <div class="tooltip"><strong>Coordination</strong>Implements master election and cluster formation using a Raft-like consensus protocol. Ensures single master, handles split-brain, manages voting configuration.</div>
+                    </div>
+                    <div class="component">Health<small>cluster/health</small>
+                        <div class="tooltip"><strong>Health</strong>Monitors cluster health status (green/yellow/red). Tracks shard allocation, unassigned shards, node availability. Powers the _cluster/health API.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer discovery-layer">
+                <div class="layer-title">🔎 Discovery Layer</div>
+                <div class="components" style="flex-direction: column;">
+                    <div class="component">Discovery Module<small>server/discovery</small>
+                        <div class="tooltip"><strong>Discovery Module</strong>Responsible for finding other nodes and forming a cluster. Coordinates the discovery process, master election, and cluster bootstrapping.</div>
+                    </div>
+                    <div class="component">Peer Finder<small>PeerFinder</small>
+                        <div class="tooltip"><strong>Peer Finder</strong>Actively probes configured seed hosts and discovered peers. Maintains list of known nodes. Triggers connection attempts and validates node compatibility.</div>
+                    </div>
+                    <div class="component">Seed Hosts Provider<small>SeedHostsProvider</small>
+                        <div class="tooltip"><strong>Seed Hosts Provider</strong>Provides initial list of nodes to contact for discovery. Can be file-based, settings-based, or from cloud provider APIs (EC2, GCE, Azure).</div>
+                    </div>
+                    <div class="component">Handshaking<small>TransportConnector</small>
+                        <div class="tooltip"><strong>Handshaking Transport Connector</strong>Establishes initial connection to discovered nodes. Validates cluster name, version compatibility, and exchanges node information.</div>
+                    </div>
+                    <div class="component">Zen Discovery<small>Consensus</small>
+                        <div class="tooltip"><strong>Zen Discovery / Consensus</strong>Legacy name for the discovery/consensus system. Now uses a Raft-based protocol for leader election and cluster state replication.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer transport-layer">
+                <div class="layer-title">🚀 Transport Layer</div>
+                <div class="components" style="flex-direction: column;">
+                    <div class="component">Transport Service<small>TransportService</small>
+                        <div class="tooltip"><strong>Transport Service</strong>High-level API for node-to-node communication. Routes requests to handlers, manages timeouts, tracks in-flight requests, and handles response callbacks.</div>
+                    </div>
+                    <div class="component">TCP Transport<small>TcpTransport</small>
+                        <div class="tooltip"><strong>TCP Transport</strong>Low-level TCP implementation for the transport protocol. Handles connection establishment, message framing, compression, and connection keep-alive.</div>
+                    </div>
+                    <div class="component">Remote Cluster<small>RemoteClusterService</small>
+                        <div class="tooltip"><strong>Remote Cluster Service</strong>Manages connections to remote clusters for cross-cluster search (CCS) and cross-cluster replication (CCR). Handles remote cluster configuration and connectivity.</div>
+                    </div>
+                    <div class="component">Connection Manager<small>ConnectionManager</small>
+                        <div class="tooltip"><strong>Connection Manager</strong>Manages persistent connections to other nodes. Handles connection pooling, reconnection logic, and connection health monitoring.</div>
+                    </div>
+                    <div class="component">Transport Interceptor<small>Security</small>
+                        <div class="tooltip"><strong>Transport Interceptor</strong>Intercepts transport messages for security, auditing, or modification. Used by X-Pack Security to authenticate/authorize inter-node communication.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- Data Section: Index, Search, Repository -->
+        <div class="data-section">
+            <div class="layer index-layer">
+                <div class="layer-title">📁 Index Layer</div>
+                <div class="components" style="flex-direction: column;">
+                    <div class="component">Index Service<small>IndexService</small>
+                        <div class="tooltip"><strong>Index Service</strong>Per-index service managing all shards of an index. Handles index-level settings, mappings, and coordinates operations across shards.</div>
+                    </div>
+                    <div class="component">Index Shard<small>index/shard</small>
+                        <div class="tooltip"><strong>Index Shard</strong>A single Lucene index instance. The basic unit of data storage and search. Each shard is either primary (handles writes) or replica (handles reads, provides redundancy).</div>
+                    </div>
+                    <div class="component">Mapper<small>index/mapper</small>
+                        <div class="tooltip"><strong>Mapper</strong>Converts JSON documents to Lucene documents. Manages field types, analyzers, and dynamic mapping. Enforces schema and handles type coercion.</div>
+                    </div>
+                    <div class="component">Engine<small>index/engine</small>
+                        <div class="tooltip"><strong>Engine</strong>Wraps Lucene IndexWriter/Reader. Manages document versioning, refresh, flush, and merge operations. InternalEngine is the main implementation.</div>
+                    </div>
+                    <div class="component">Transaction Log<small>index/translog</small>
+                        <div class="tooltip"><strong>Transaction Log (Translog)</strong>Write-ahead log for durability. Records all operations before Lucene commit. Enables real-time GET and crash recovery without data loss.</div>
+                    </div>
+                    <div class="component">Store<small>index/store</small>
+                        <div class="tooltip"><strong>Store</strong>Abstraction over Lucene Directory. Manages index files on disk, handles file locking, and provides corruption detection via checksums.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer search-layer">
+                <div class="layer-title">🔍 Search Layer</div>
+                <div class="components" style="flex-direction: column;">
+                    <div class="component">Search Service<small>SearchService</small>
+                        <div class="tooltip"><strong>Search Service</strong>Executes search queries on local shards. Manages search contexts, scroll state, and coordinates query/fetch phases. Entry point for shard-level search.</div>
+                    </div>
+                    <div class="component">Aggregations<small>search/aggregations</small>
+                        <div class="tooltip"><strong>Aggregations</strong>Computes analytics over search results: terms, histograms, stats, nested, pipeline aggregations. Supports complex nested aggregation trees.</div>
+                    </div>
+                    <div class="component">Query<small>search/query</small>
+                        <div class="tooltip"><strong>Query</strong>Parses and executes search queries. Supports bool, match, term, range, geo, nested queries. Converts to Lucene queries for execution.</div>
+                    </div>
+                    <div class="component">Suggest<small>search/suggest</small>
+                        <div class="tooltip"><strong>Suggest</strong>Provides search suggestions and auto-completion. Term suggester, phrase suggester, and completion suggester for type-ahead functionality.</div>
+                    </div>
+                    <div class="component">Fetch<small>search/fetch</small>
+                        <div class="tooltip"><strong>Fetch</strong>Retrieves actual document content after query phase identifies matching docs. Handles source filtering, stored fields, and script fields.</div>
+                    </div>
+                    <div class="component">Sort<small>search/sort</small>
+                        <div class="tooltip"><strong>Sort</strong>Orders search results by field values, _score, geo distance, or custom scripts. Supports multi-level sorting and missing value handling.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layer repo-layer">
+                <div class="layer-title">💾 Repository / Snapshots</div>
+                <div class="components" style="flex-direction: column;">
+                    <div class="component">Repositories Service<small>server/repositories</small>
+                        <div class="tooltip"><strong>Repositories Service</strong>Manages snapshot repositories (S3, GCS, Azure, HDFS, filesystem). Handles repository registration, validation, and cleanup operations.</div>
+                    </div>
+                    <div class="component">Snapshots Service<small>server/snapshots</small>
+                        <div class="tooltip"><strong>Snapshots Service</strong>Orchestrates snapshot creation and deletion. Coordinates snapshotting across all shards, tracks progress, handles failures, and manages concurrent snapshots.</div>
+                    </div>
+                    <div class="component">Blob Store<small>repositories/blobstore</small>
+                        <div class="tooltip"><strong>Blob Store</strong>Low-level abstraction for storing binary data (blobs). Implemented by each repository type. Handles chunking, compression, and integrity verification.</div>
+                    </div>
+                    <div class="component">Restore Service<small>RestoreService</small>
+                        <div class="tooltip"><strong>Restore Service</strong>Restores indices from snapshots. Handles index renaming, partial restore, and coordinates recovery of shard data from repository.</div>
+                    </div>
+                    <div class="component">S3/GCS/Azure<small>Cloud Storage</small>
+                        <div class="tooltip"><strong>Cloud Storage Repositories</strong>Repository implementations for major cloud providers. S3 (AWS), GCS (Google Cloud), Azure Blob Storage. Handles authentication and cloud-specific APIs.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- Lucene Layer -->
+        <div class="layer lucene-layer">
+            <div class="layer-title">⚙️ Apache Lucene (Core Search Engine)</div>
+            <div class="components">
+                <div class="component">Lucene Core<small>server/lucene</small>
+                    <div class="tooltip"><strong>Lucene Core</strong>The foundation search library. Provides inverted index, term dictionaries, and scoring algorithms. Elasticsearch extends Lucene with distributed capabilities.</div>
+                </div>
+                <div class="component">Index Reader/Writer<small>DirectoryReader</small>
+                    <div class="tooltip"><strong>Index Reader/Writer</strong>IndexWriter adds/updates documents. DirectoryReader provides point-in-time view for searching. Near-real-time readers enable refresh semantics.</div>
+                </div>
+                <div class="component">Query Parser<small>QueryParser</small>
+                    <div class="tooltip"><strong>Query Parser</strong>Converts query DSL to Lucene Query objects. BooleanQuery, TermQuery, PhraseQuery, etc. Elasticsearch wraps with its own query builders.</div>
+                </div>
+                <div class="component">Analysis<small>Analyzers</small>
+                    <div class="tooltip"><strong>Analysis</strong>Text processing pipeline: tokenizers, token filters, char filters. Converts text to terms for indexing and searching. Language-specific analyzers available.</div>
+                </div>
+                <div class="component">Codecs<small>Lucene99</small>
+                    <div class="tooltip"><strong>Codecs</strong>Defines on-disk format for index data. Handles compression, encoding of postings, doc values, stored fields. Lucene99 is the current default codec.</div>
+                </div>
+                <div class="component">Collectors<small>TopDocs</small>
+                    <div class="tooltip"><strong>Collectors</strong>Gathers search results during query execution. TopDocsCollector for ranked results, TotalHitCountCollector for counts, custom collectors for aggregations.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- X-Pack Layer -->
+        <div class="layer xpack-layer">
+            <div class="layer-title">🔐 X-Pack Features (Commercial)</div>
+            <div class="components">
+                <div class="component">Security<small>x-pack/security</small>
+                    <div class="tooltip"><strong>Security</strong>Authentication (LDAP, SAML, OIDC, PKI), authorization (RBAC), encryption (TLS), audit logging, field/document level security. Protects cluster access.</div>
+                </div>
+                <div class="component">Machine Learning<small>x-pack/ml</small>
+                    <div class="tooltip"><strong>Machine Learning</strong>Anomaly detection, forecasting, and inference. Runs ML jobs on time-series data. Integrates with trained models for NLP, classification, regression.</div>
+                </div>
+                <div class="component">Watcher<small>x-pack/watcher</small>
+                    <div class="tooltip"><strong>Watcher</strong>Alerting and monitoring. Defines watches with triggers, conditions, and actions. Sends notifications via email, Slack, webhooks when conditions are met.</div>
+                </div>
+                <div class="component">Graph<small>x-pack/graph</small>
+                    <div class="tooltip"><strong>Graph</strong>Explores connections in data. Identifies significant relationships between indexed terms. Powers the Graph UI in Kibana for visualization.</div>
+                </div>
+                <div class="component">SQL<small>x-pack/sql</small>
+                    <div class="tooltip"><strong>SQL</strong>Query Elasticsearch using SQL syntax. Translates SQL to Query DSL. Supports JDBC/ODBC drivers for BI tool integration.</div>
+                </div>
+                <div class="component">ESQL<small>x-pack/esql</small>
+                    <div class="tooltip"><strong>ES|QL</strong>New piped query language for Elasticsearch. Combines search, aggregation, and transformation in a single query. More expressive than Query DSL.</div>
+                </div>
+                <div class="component">CCR<small>x-pack/ccr</small>
+                    <div class="tooltip"><strong>Cross-Cluster Replication</strong>Replicates indices across clusters for disaster recovery and geo-distribution. Leader-follower model with near-real-time sync.</div>
+                </div>
+                <div class="component">ILM<small>x-pack/ilm</small>
+                    <div class="tooltip"><strong>Index Lifecycle Management</strong>Automates index lifecycle: hot → warm → cold → frozen → delete. Manages rollover, shrink, force merge based on age/size policies.</div>
+                </div>
+                <div class="component">Transform<small>x-pack/transform</small>
+                    <div class="tooltip"><strong>Transform</strong>Pivots and summarizes data into new indices. Continuous transforms keep destination up-to-date. Used for denormalization and analytics.</div>
+                </div>
+                <div class="component">Inference<small>x-pack/inference</small>
+                    <div class="tooltip"><strong>Inference</strong>Runs ML models at ingest or search time. Supports NLP models (NER, sentiment, embeddings), integration with external ML services.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- Modules Layer -->
+        <div class="layer modules-layer">
+            <div class="layer-title">📦 Core Modules (modules/)</div>
+            <div class="components">
+                <div class="component">Ingest Common<small>ingest-common</small>
+                    <div class="tooltip"><strong>Ingest Common</strong>Built-in ingest processors: set, remove, rename, convert, grok, date, json, script, etc. Pre-processes documents before indexing.</div>
+                </div>
+                <div class="component">Analysis Common<small>analysis-common</small>
+                    <div class="tooltip"><strong>Analysis Common</strong>Standard text analyzers and tokenizers: standard, whitespace, keyword, pattern, lowercase, stop words, stemming, synonym filters.</div>
+                </div>
+                <div class="component">Painless<small>lang-painless</small>
+                    <div class="tooltip"><strong>Painless</strong>Elasticsearch's scripting language. Secure, fast, and purpose-built for search. Used in updates, aggregations, scoring, and ingest.</div>
+                </div>
+                <div class="component">Reindex<small>reindex</small>
+                    <div class="tooltip"><strong>Reindex</strong>Copies documents between indices. Supports remote reindex, query filtering, scripted transforms. Essential for migrations and reindexing.</div>
+                </div>
+                <div class="component">Aggregations<small>aggregations</small>
+                    <div class="tooltip"><strong>Aggregations Module</strong>Extended aggregation types beyond core: matrix stats, adjacency matrix, and other specialized analytical aggregations.</div>
+                </div>
+                <div class="component">Data Streams<small>data-streams</small>
+                    <div class="tooltip"><strong>Data Streams</strong>Append-only time-series data abstraction. Auto-manages backing indices, rollover, and ILM. Ideal for logs, metrics, and events.</div>
+                </div>
+                <div class="component">Repository S3<small>repository-s3</small>
+                    <div class="tooltip"><strong>Repository S3</strong>Snapshot repository backed by AWS S3. Handles multipart uploads, server-side encryption, and IAM authentication.</div>
+                </div>
+                <div class="component">APM<small>apm</small>
+                    <div class="tooltip"><strong>APM</strong>Application Performance Monitoring integration. Provides data templates, ILM policies, and ingest pipelines for APM data.</div>
+                </div>
+                <div class="component">GeoIP<small>ingest-geoip</small>
+                    <div class="tooltip"><strong>Ingest GeoIP</strong>Enriches documents with geographic information from IP addresses using MaxMind databases. Auto-updates GeoIP databases.</div>
+                </div>
+                <div class="component">Percolator<small>percolator</small>
+                    <div class="tooltip"><strong>Percolator</strong>Reverse search: stores queries and matches documents against them. Used for alerting, prospective search, and content matching.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow">▼</div>
+
+        <!-- Libs Layer -->
+        <div class="layer libs-layer">
+            <div class="layer-title">📚 Core Libraries (libs/)</div>
+            <div class="components">
+                <div class="component">Core<small>libs/core</small>
+                    <div class="tooltip"><strong>Core Library</strong>Foundational utilities: Strings, TimeValue, ByteSizeValue, settings parsing, common data structures. Used throughout the codebase.</div>
+                </div>
+                <div class="component">X-Content<small>libs/x-content</small>
+                    <div class="tooltip"><strong>X-Content</strong>JSON/YAML/CBOR/SMILE parsing and generation. XContentBuilder for creating responses. Foundation for all serialization.</div>
+                </div>
+                <div class="component">CLI<small>libs/cli</small>
+                    <div class="tooltip"><strong>CLI Library</strong>Command-line interface utilities. Argument parsing, terminal handling, password input. Powers elasticsearch-* command-line tools.</div>
+                </div>
+                <div class="component">Geo<small>libs/geo</small>
+                    <div class="tooltip"><strong>Geo Library</strong>Geographic types and operations: points, shapes, polygons, geo_hash, geo_tile. Spatial indexing and query support.</div>
+                </div>
+                <div class="component">SSL Config<small>libs/ssl-config</small>
+                    <div class="tooltip"><strong>SSL Config</strong>SSL/TLS configuration utilities. Certificate loading, keystore/truststore management, cipher suite selection.</div>
+                </div>
+                <div class="component">Grok<small>libs/grok</small>
+                    <div class="tooltip"><strong>Grok Library</strong>Pattern matching for unstructured text. Uses named regex patterns. Popular for log parsing in ingest pipelines.</div>
+                </div>
+                <div class="component">Dissect<small>libs/dissect</small>
+                    <div class="tooltip"><strong>Dissect Library</strong>Fast delimiter-based text parsing. Simpler and faster than Grok for structured log formats. No regex overhead.</div>
+                </div>
+                <div class="component">Logging<small>libs/logging</small>
+                    <div class="tooltip"><strong>Logging Library</strong>Elasticsearch's logging abstraction over Log4j2. Structured JSON logging, deprecation logging, slow log support.</div>
+                </div>
+                <div class="component">Native<small>libs/native</small>
+                    <div class="tooltip"><strong>Native Library</strong>JNI bindings to native code: zstd compression, memory locking (mlockall), system calls, hardware detection.</div>
+                </div>
+                <div class="component">Plugin API<small>libs/plugin-api</small>
+                    <div class="tooltip"><strong>Plugin API</strong>Stable API for plugin development. Defines extension points, plugin metadata, and classloader isolation boundaries.</div>
+                </div>
+                <div class="component">SIMD Vec<small>libs/simdvec</small>
+                    <div class="tooltip"><strong>SIMD Vector</strong>Vectorized operations using SIMD instructions. Accelerates vector similarity calculations for dense vector search (kNN).</div>
+                </div>
+                <div class="component">LZ4<small>libs/lz4</small>
+                    <div class="tooltip"><strong>LZ4 Library</strong>Fast compression codec. Used for translog, stored fields, and network compression. Optimizes for speed over ratio.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <h3>📋 Legend - Data Flow</h3>
+            <div>
+                <div class="legend-item"><div class="legend-color" style="background: #fff2cc; border: 2px solid #d6b656;"></div> Client Components</div>
+                <div class="legend-item"><div class="legend-color" style="background: #e1d5e7; border: 2px solid #9673a6;"></div> HTTP/REST</div>
+                <div class="legend-item"><div class="legend-color" style="background: #f8cecc; border: 2px solid #b85450;"></div> Actions</div>
+                <div class="legend-item"><div class="legend-color" style="background: #4a4e69; border: 2px solid #22223b;"></div> Node Core</div>
+                <div class="legend-item"><div class="legend-color" style="background: #b0e3e6; border: 2px solid #0e8088;"></div> Cluster</div>
+                <div class="legend-item"><div class="legend-color" style="background: #d0cee2; border: 2px solid #56517e;"></div> Discovery</div>
+                <div class="legend-item"><div class="legend-color" style="background: #f9d5c4; border: 2px solid #c5795e;"></div> Transport</div>
+                <div class="legend-item"><div class="legend-color" style="background: #c3e6cb; border: 2px solid #155724;"></div> Index</div>
+                <div class="legend-item"><div class="legend-color" style="background: #b8daff; border: 2px solid #004085;"></div> Search</div>
+                <div class="legend-item"><div class="legend-color" style="background: #ffeeba; border: 2px solid #856404;"></div> Lucene</div>
+                <div class="legend-item"><div class="legend-color" style="background: #ffb3b3; border: 2px solid #cc0000;"></div> X-Pack</div>
+            </div>
+            <p style="margin-top: 15px; opacity: 0.8;">
+                <strong>Request Flow:</strong> Client → HTTP → REST Handler → Action → Node Services → Cluster/Transport → Index/Search → Lucene
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+
